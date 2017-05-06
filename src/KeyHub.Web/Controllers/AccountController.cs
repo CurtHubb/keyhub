@@ -1,28 +1,21 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Data;
-using System.Data.Common;
 using System.Data.Entity;
 using System.Data.Entity.Infrastructure;
-using System.Data.Entity.Core;
 using System.Data.SqlClient;
 using System.Linq;
 using System.Net;
-using System.Security.Principal;
-using System.Web;
 using System.Web.Mvc;
-using System.Web.Security;
 using DotNetOpenAuth.AspNet;
 using KeyHub.Model;
-using Microsoft.Ajax.Utilities;
 using Microsoft.Web.WebPages.OAuth;
 using KeyHub.Data;
 using KeyHub.Web.Models;
 using KeyHub.Web.ViewModels.User;
 using MvcFlash.Core;
 using WebMatrix.WebData;
-using Membership = System.Web.Security.Membership;
-
+using System.Data.Entity.Core;
+using Microsoft.AspNet.Identity;
 
 namespace KeyHub.Web.Controllers
 {
@@ -33,9 +26,11 @@ namespace KeyHub.Web.Controllers
     public class AccountController : Controller
     {
         private readonly IDataContextFactory dataContextFactory;
-        public AccountController(IDataContextFactory dataContextFactory)
+        private readonly UserManager<User, int> userManager;
+        public AccountController(IDataContextFactory dataContextFactory, UserManager<User, int> userManager)
         {
             this.dataContextFactory = dataContextFactory;
+            this.userManager = userManager;
         }
 
         /// <summary>
@@ -47,9 +42,9 @@ namespace KeyHub.Web.Controllers
             using (var context = dataContextFactory.CreateByUser())
             {
                 // Eager loading users (except current user) and roles
-                var usersQuery = (from u in context.Users where u.MembershipUserIdentifier != User.Identity.Name select u)
+                var usersQuery = (from u in context.Users where u.Email != User.Identity.Name select u)
                                  .Include(u => u.Rights.Select(r => r.RightObject))
-                                 .OrderBy(u => u.MembershipUserIdentifier);
+                                 .OrderBy(u => u.Email);
 
                 var viewModel = new UserIndexViewModel(context.GetUser(HttpContext.User.Identity), usersQuery.ToList());
 
@@ -64,7 +59,7 @@ namespace KeyHub.Web.Controllers
         [Authorize(Roles = Role.SystemAdmin)]
         public ActionResult Create()
         {
-            var viewModel = new UserCreateViewModel(thisOne:true);
+            var viewModel = new UserCreateViewModel(thisOne: true);
             return View(viewModel);
         }
 
@@ -79,19 +74,30 @@ namespace KeyHub.Web.Controllers
             if (ModelState.IsValid)
             {
                 // Attempt to register the user
-                var newMembershipUserIdentifier = Guid.NewGuid().ToString();
 
-                WebSecurity.CreateUserAndAccount(newMembershipUserIdentifier, viewModel.User.Password, new { Email = viewModel.User.Email });
-
-                Flash.Success("New user succesfully created");
-
-                if (Url.IsLocalUrl(viewModel.RedirectUrl))
+                var user = new User() { Email = viewModel.User.Email };
+                var result = userManager.Create(user, viewModel.User.Password);
+                if (result.Succeeded)
                 {
-                    return Redirect(viewModel.RedirectUrl);
+                    Flash.Success("New user succesfully created");
+                    if (Url.IsLocalUrl(viewModel.RedirectUrl))
+                    {
+                        return Redirect(viewModel.RedirectUrl);
+                    }
+                    else
+                    {
+                        return RedirectToAction("Index", "Home");
+                    }
                 }
                 else
                 {
-                    return RedirectToAction("Index", "Home");
+                    result
+                        .Errors
+                        .ToList()
+                        .ForEach(error => ModelState.AddModelError("", error));
+                    var newViewModel = new UserCreateViewModel(thisOne: true);
+                    return View(viewModel);
+
                 }
             }
 
@@ -108,17 +114,17 @@ namespace KeyHub.Web.Controllers
         {
             using (var context = dataContextFactory.Create())
             {
-                var user = context.Users.FirstOrDefault(x => x.UserId == id);
+                var user = context.Users.FirstOrDefault(x => x.Id == id);
 
                 if (user == null)
                     return new HttpStatusCodeResult(HttpStatusCode.NotFound);
 
-                if (!User.IsInRole(Role.SystemAdmin) && user.MembershipUserIdentifier != User.Identity.Name)
+                if (!User.IsInRole(Role.SystemAdmin) && user.Email != User.Identity.Name)
                     return new HttpStatusCodeResult(HttpStatusCode.Forbidden);
-                
+
                 var viewModel = new UserEditViewModel()
                 {
-                    UserId = user.UserId,
+                    UserId = user.Id,
                     Email = user.Email
                 };
 
@@ -138,17 +144,18 @@ namespace KeyHub.Web.Controllers
             {
                 using (var context = dataContextFactory.Create())
                 {
-                    var user = context.Users.FirstOrDefault(x => x.UserId == viewModel.UserId);
+                    var user = context.Users.FirstOrDefault(x => x.Id == viewModel.UserId);
 
                     if (user == null)
                         return new HttpStatusCodeResult(HttpStatusCode.NotFound);
 
-                    if (!User.IsInRole(Role.SystemAdmin) && user.MembershipUserIdentifier != User.Identity.Name)
+                    if (!User.IsInRole(Role.SystemAdmin) && user.Email != User.Identity.Name)
                         return new HttpStatusCodeResult(HttpStatusCode.Forbidden);
 
                     //Email can always be updated
                     user.Email = viewModel.Email;
                     context.SaveChanges();
+                    userManager.
 
                     return RedirectToAction("Index");
                 }
@@ -186,7 +193,7 @@ namespace KeyHub.Web.Controllers
 
                     if (user != null)
                     {
-                        if (WebSecurity.Login(user.MembershipUserIdentifier, model.Password, persistCookie: model.RememberMe))
+                        if (WebSecurity.Login(user.Email, model.Password, persistCookie: model.RememberMe))
                         {
                             if (Url.IsLocalUrl(returnUrl))
                             {
@@ -252,7 +259,7 @@ namespace KeyHub.Web.Controllers
                 {
                     if (exception.Message.Contains("IX_Email") && exception.Message.Contains("duplicate"))
                     {
-                        ModelState.AddModelError("", 
+                        ModelState.AddModelError("",
                             "The email address registered is already in use on this site using a different login method.  "
                             + "Please login with the original login method used for that email.  "
                             + "Then you may associate other login methods with your account.  ");
@@ -303,7 +310,7 @@ namespace KeyHub.Web.Controllers
         {
             if (ModelState.IsValid)
             {
-                if(WebSecurity.ChangePassword(User.Identity.Name, model.OldPassword, model.NewPassword))
+                if (WebSecurity.ChangePassword(User.Identity.Name, model.OldPassword, model.NewPassword))
                 {
                     Flash.Success("Your password has been changed.");
                     return RedirectToAction("Index");
@@ -360,7 +367,7 @@ namespace KeyHub.Web.Controllers
             }
 
             //Login with authentication result
-            if(OAuthWebSecurity.Login(authenticationResult.Provider, authenticationResult.ProviderUserId, createPersistentCookie: true))
+            if (OAuthWebSecurity.Login(authenticationResult.Provider, authenticationResult.ProviderUserId, createPersistentCookie: true))
             {
                 return RedirectTo(returnUrl);
             }
@@ -384,7 +391,7 @@ namespace KeyHub.Web.Controllers
                 using (var db = dataContextFactory.Create())
                 {
                     // Insert name into the profile table
-                    db.Users.Add(new User { MembershipUserIdentifier = membershipUserIdentifier, Email = authenticationResult.UserName });
+                    db.Users.Add(new User { Email = authenticationResult.UserName });
                     db.SaveChanges();
                 }
             }
@@ -417,7 +424,7 @@ namespace KeyHub.Web.Controllers
             OAuthWebSecurity.CreateOrUpdateAccount(authenticationResult.Provider, authenticationResult.ProviderUserId, membershipUserIdentifier);
             OAuthWebSecurity.Login(authenticationResult.Provider, authenticationResult.ProviderUserId, createPersistentCookie: true);
 
-            return RedirectTo(returnUrl);     
+            return RedirectTo(returnUrl);
         }
 
         /// <summary>
@@ -473,7 +480,7 @@ namespace KeyHub.Web.Controllers
 
         public ActionResult UnlinkLogin(string provider)
         {
-            return View(new UnlinkLoginModel() {Provider = provider});
+            return View(new UnlinkLoginModel() { Provider = provider });
         }
 
         [HttpPost, ValidateAntiForgeryToken, ActionName("UnlinkLogin")]
@@ -482,7 +489,7 @@ namespace KeyHub.Web.Controllers
             using (var context = dataContextFactory.Create())
             {
                 var model = LinkAccountModel.ForUser(context, User.Identity);
-                
+
                 if (!model.AllowRemovingLogin)
                 {
                     Flash.Error(

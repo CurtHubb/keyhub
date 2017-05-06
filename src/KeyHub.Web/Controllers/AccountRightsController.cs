@@ -56,7 +56,7 @@ namespace KeyHub.Web.Controllers
                 UserObjectRight userObjectRight = NewUserObjectRight(objectType);
                 SelectList objectList = null;
                 Model.Right right = null;
-                switch(objectType)
+                switch (objectType)
                 {
                     case ObjectTypes.Vendor:
                         objectList = (from v in context.Vendors select v).ToSelectList(x => x.ObjectId, x => x.Name);
@@ -67,14 +67,14 @@ namespace KeyHub.Web.Controllers
                         right = (from x in context.Rights where x.RightId == Model.EditEntityMembers.Id select x).FirstOrDefault();
                         break;
                     case ObjectTypes.License:
-                        objectList = (from l in context.Licenses select new {Id = l.ObjectId, Name = l.Sku.SkuCode}).ToSelectList(x => x.Id, x => x.Name);
+                        objectList = (from l in context.Licenses select new { Id = l.ObjectId, Name = l.Sku.SkuCode }).ToSelectList(x => x.Id, x => x.Name);
                         right = (from x in context.Rights where x.RightId == Model.EditLicenseInfo.Id select x).FirstOrDefault();
                         break;
                     default:
                         throw new NotImplementedException("ObjectType not known");
                 }
 
-                userObjectRight.User = (from x in context.Users where x.UserId == userId select x).FirstOrDefault();
+                userObjectRight.User = (from x in context.Users where x.Id == userId select x).FirstOrDefault();
                 userObjectRight.UserId = userId;
                 userObjectRight.Right = right;
                 userObjectRight.RightId = right.RightId;
@@ -118,7 +118,7 @@ namespace KeyHub.Web.Controllers
                 }
                 else
                 {
-                    return RedirectToAction("Edit", "Account", new { id = viewModel.UserId});
+                    return RedirectToAction("Edit", "Account", new { id = viewModel.UserId });
                 }
             }
             return Create(viewModel.UserId, viewModel.ObjectType);
@@ -147,14 +147,15 @@ namespace KeyHub.Web.Controllers
                     RightId = rightId,
                     ObjectId = objectId,
                     Type = type,
-                    UserEmail = context.Users.Single(u => u.UserId == userId).Email
+                    UserEmail = context.Users.Single(u => u.Id == userId).Email
                 };
 
                 switch (type)
                 {
                     case ObjectTypes.Vendor:
-                        var vendorRight = (from x in context.UserVendorRights 
-                            where x.UserId == userId && x.RightId == rightId && x.ObjectId == objectId select x)
+                        var vendorRight = (from x in context.UserVendorRights
+                                           where x.UserId == userId && x.RightId == rightId && x.ObjectId == objectId
+                                           select x)
                             .Include(r => r.Vendor)
                             .FirstOrDefault();
 
@@ -162,8 +163,9 @@ namespace KeyHub.Web.Controllers
                         model.Url = "/Vendor/Details?key=" + objectId;
                         break;
                     case ObjectTypes.Customer:
-                        var customerRight = (from x in context.UserCustomerRights 
-                            where x.UserId == userId && x.RightId == rightId && x.ObjectId == objectId select x)
+                        var customerRight = (from x in context.UserCustomerRights
+                                             where x.UserId == userId && x.RightId == rightId && x.ObjectId == objectId
+                                             select x)
                             .Include(r => r.Customer)
                             .FirstOrDefault();
 
@@ -171,8 +173,9 @@ namespace KeyHub.Web.Controllers
                         model.Url = "/Customer/Edit?key=" + objectId;
                         break;
                     case ObjectTypes.License:
-                        var licenseRight = (from x in context.UserLicenseRights 
-                            where x.UserId == userId && x.RightId == rightId && x.ObjectId == objectId select x)
+                        var licenseRight = (from x in context.UserLicenseRights
+                                            where x.UserId == userId && x.RightId == rightId && x.ObjectId == objectId
+                                            select x)
                             .Include(r => r.License)
                             .Include(r => r.License.Sku)
                             .FirstOrDefault();
@@ -196,7 +199,7 @@ namespace KeyHub.Web.Controllers
                 var userId = model.UserId;
                 var rightId = model.RightId;
                 var objectId = model.ObjectId;
-                
+
                 switch (model.Type)
                 {
                     case ObjectTypes.Vendor:
@@ -233,10 +236,10 @@ namespace KeyHub.Web.Controllers
 
                 context.SaveChanges();
 
-                return RedirectToAction("Edit", "Account", new {id = userId});
-            }            
+                return RedirectToAction("Edit", "Account", new { id = userId });
+            }
         }
-        
+
         /// <summary>
         /// Create a new instance of an UserObjectRight based on the provided objectType
         /// </summary>
