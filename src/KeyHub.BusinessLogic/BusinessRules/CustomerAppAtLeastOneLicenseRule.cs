@@ -3,6 +3,7 @@ using KeyHub.Data;
 using KeyHub.Data.BusinessRules;
 using KeyHub.Model;
 using System.Collections.Generic;
+using System.Data.Entity;
 using System.Data.Entity.Infrastructure;
 
 namespace KeyHub.BusinessLogic.BusinessRules

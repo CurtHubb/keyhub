@@ -129,7 +129,7 @@ namespace KeyHub.Data
                     modelConfiguration.AddConfiguration(modelBuilder.Configurations);
                 }
             }
-
+            Database.SetInitializer<DataContext>(null);
             base.OnModelCreating(modelBuilder);
         }
 

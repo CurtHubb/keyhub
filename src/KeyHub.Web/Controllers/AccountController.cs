@@ -4,6 +4,7 @@ using System.Data;
 using System.Data.Common;
 using System.Data.Entity;
 using System.Data.Entity.Infrastructure;
+using System.Data.Entity.Core;
 using System.Data.SqlClient;
 using System.Linq;
 using System.Net;
@@ -21,6 +22,7 @@ using KeyHub.Web.ViewModels.User;
 using MvcFlash.Core;
 using WebMatrix.WebData;
 using Membership = System.Web.Security.Membership;
+
 
 namespace KeyHub.Web.Controllers
 {
